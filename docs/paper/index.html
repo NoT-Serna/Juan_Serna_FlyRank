@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CTR / Engagement Opportunity Scoring: A Time-Aware Content Review Queue</title>
+<meta name="description" content="A time-aware, leakage-audited review queue for prioritizing content pages, built on the FlyRank ML Internship dataset.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#fcfcfd;--ink:#1b2430;--muted:#5b6675;--rule:#d9dee5;--accent:#2f5d8c;--warm:#b7791f;--panel:#f1f4f8;--ok:#2f7d5b}
+@media (prefers-color-scheme:dark){:root{--bg:#14181e;--ink:#e6eaf0;--muted:#9aa5b4;--rule:#2b333d;--accent:#7fb0e0;--warm:#e0a94a;--panel:#1b2129;--ok:#6fcf9f}}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:1.5rem}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Source Serif 4",Georgia,"Times New Roman",serif;font-size:1.0625rem;line-height:1.7}
+.wrap{display:grid;grid-template-columns:13rem minmax(0,42rem);gap:3.5rem;max-width:62rem;margin:0 auto;padding:3rem 1.25rem 5rem}
+nav{position:sticky;top:2rem;align-self:start;font-family:Inter,system-ui,sans-serif;font-size:.85rem}
+nav p{margin:0 0 .6rem;color:var(--muted);font-weight:600}
+nav a{display:block;color:var(--muted);text-decoration:none;padding:.22rem 0 .22rem .8rem;border-left:2px solid var(--rule)}
+nav a:hover,nav a:focus-visible{color:var(--accent);border-left-color:var(--accent);outline:none}
+h1{font-size:2.25rem;line-height:1.2;margin:0 0 1rem;font-weight:600;letter-spacing:-.01em}
+h2{font-size:1.5rem;margin:3.2rem 0 .8rem;font-weight:600;padding-top:1.4rem;border-top:1px solid var(--rule)}
+h3{font-family:Inter,system-ui,sans-serif;font-size:1rem;margin:1.8rem 0 .4rem;font-weight:600}
+p{margin:0 0 1rem}
+a{color:var(--accent)}
+.byline{font-family:Inter,system-ui,sans-serif;font-size:.9rem;color:var(--muted);margin-bottom:2rem}
+.abstract{background:var(--panel);border-left:3px solid var(--accent);padding:1.1rem 1.4rem;margin:0 0 1rem}
+.abstract ol{margin:0;padding-left:1.2rem}
+.abstract li{margin:.35rem 0}
+table{width:100%;border-collapse:collapse;font-family:Inter,system-ui,sans-serif;font-size:.88rem;margin:1rem 0 1.4rem;display:block;overflow-x:auto}
+th,td{text-align:left;padding:.5rem .7rem;border-bottom:1px solid var(--rule);vertical-align:top}
+th{font-weight:600;border-bottom:2px solid var(--ink)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.85em;background:var(--panel);padding:.1em .35em;border-radius:3px}
+pre{background:var(--panel);padding:1rem;overflow-x:auto;font-size:.82rem;line-height:1.5;border-radius:4px}
+pre code{background:none;padding:0}
+figure{margin:1.6rem 0}
+figcaption{font-family:Inter,system-ui,sans-serif;font-size:.82rem;color:var(--muted);margin-top:.5rem;line-height:1.5}
+svg{width:100%;height:auto;display:block;font-family:Inter,system-ui,sans-serif}
+svg text{fill:var(--ink)}
+svg .m{fill:var(--muted)}
+.fig-img{width:100%;border:1px solid var(--rule);border-radius:4px;background:#fff}
+.callout{border:1px solid var(--rule);border-left:3px solid var(--warm);padding:.8rem 1.1rem;margin:1.2rem 0;font-size:.98rem}
+.cannot li::marker{color:var(--warm)}
+footer{margin-top:3rem;padding-top:1.4rem;border-top:1px solid var(--rule);font-family:Inter,system-ui,sans-serif;font-size:.85rem;color:var(--muted)}
+@media (max-width:860px){.wrap{display:block;padding-top:1.5rem}nav{position:static;margin-bottom:2rem}nav a{display:inline-block;border:0;padding:.2rem .6rem .2rem 0}h1{font-size:1.75rem}}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav aria-label="Sections">
+<p>Contents</p>
+<a href="#abstract">Abstract</a>
+<a href="#introduction">Introduction</a>
+<a href="#data">Data</a>
+<a href="#methodology">Methodology</a>
+<a href="#results">Results</a>
+<a href="#limitations">Limitations</a>
+<a href="#recommendations">Recommendations</a>
+<a href="#reproducibility">Reproducibility</a>
+<a href="#acknowledgments">Acknowledgments</a>
+</nav>
+
+<main>
+<header>
+<h1>CTR / Engagement Opportunity Scoring: A Time-Aware Content Review Queue</h1>
+<div class="byline">Juan Serna · FlyRank ML Internship, Capstone · Lane 4 · 2026</div>
+</header>
+
+<section id="abstract">
+<h2 style="border:0;padding-top:0;margin-top:0">Abstract</h2>
+<div class="abstract"><ol>
+<li><strong>Question.</strong> Which content pages should a marketing or UX team review first for CTR optimization, and can a simple model prioritize them usefully?</li>
+<li><strong>Method.</strong> I framed this as binary classification: <code>needs_review</code> = 1 when a page's CTR is below the CTR expected for its position bucket and it has at least 100 impressions. A logistic regression on <code>impressions</code>, <code>avg_position</code> and <code>ctr</code> was trained on April 2025 features against May outcomes.</li>
+<li><strong>Result.</strong> Tested on May features against June outcomes, the model measured F1 = 0.716 (precision 0.61, recall 0.87), against 0.709 under a random split of the training months.</li>
+<li><strong>Interpretation.</strong> The score did not fall on future data, so the feature–label relationship looks stable across this three-month window. It is only modestly above a trivial "flag everything" predictor (F1 ≈ 0.67).</li>
+<li><strong>Deliverable.</strong> A ranked review queue with reason codes and a leakage audit, offered as directional decision support for human triage, not as causal evidence about SEO outcomes.</li>
+</ol></div>
+</section>
+
+<section id="introduction">
+<h2>1. Introduction</h2>
+<p>Content teams own far more pages than they can inspect each month. Most sit in a crowded middle: not clearly broken, not clearly thriving. Choosing which pages to look at first is an operational bottleneck that shapes how marketing and UX time is spent.</p>
+<p>The decision this work supports is a weekly triage: of the pages we own, which should a reviewer check for title, snippet or intent-alignment problems? A ranked queue answers it.</p>
+<p>A fixed rule is transparent but binary. It cannot order the flagged pages. A model that outputs a probability can. A false positive costs a reviewer some time, and a false negative leaves a fixable page unexamined for another month. Both costs are small, which is why the output is a priority ordering and not an automated action.</p>
+<p>Scope: one three-month window (April–June 2025), one model family, one rule-defined label.</p>
+</section>
+
+<section id="data">
+<h2>2. Data</h2>
+<h3>Source</h3>
+<p>The FlyRank ML Internship warehouse, <code>fact_content_daily_performance</code> (one row per client × content × report date). Metadata from <code>dim_content</code> was used for exploration only. All identifiers are anonymized hash IDs.</p>
+<h3>Date windows</h3>
+<table>
+<tr><th>Role</th><th>Month</th><th>Note</th></tr>
+<tr><td>Training features</td><td>2025-04</td><td>Aggregated to one row per client and content</td></tr>
+<tr><td>Training label</td><td>2025-05</td><td><code>needs_review</code> computed from May aggregates</td></tr>
+<tr><td>Test features</td><td>2025-05</td><td>Not used in training</td></tr>
+<tr><td>Test label</td><td>2025-06</td><td>Future outcome, never seen in training</td></tr>
+</table>
+<h3>Rows observed</h3>
+<table>
+<tr><th>Slice</th><th>Rows</th><th>Positives</th></tr>
+<tr><td>April monthly aggregates</td><td>13,046</td><td></td></tr>
+<tr><td>May monthly aggregates</td><td>14,887</td><td></td></tr>
+<tr><td>June monthly aggregates</td><td>16,399</td><td></td></tr>
+<tr><td>April→May training set</td><td>12,616</td><td>7,014 (55.6%)</td></tr>
+<tr><td>May→June test set</td><td>13,948</td><td>7,081 (50.8%)</td></tr>
+</table>
+<h3>Excluded, and why</h3>
+<ul>
+<li><code>client_has_gsc</code>, <code>gsc_data_available</code>, <code>ga4_data_available</code>: data-availability flags, not SEO signals. They would let a model learn whether a row exists in the pipeline.</li>
+<li>Raw client and content IDs: used only as join keys.</li>
+<li>Any feature from the label month or later.</li>
+<li>Pages without a match in both consecutive months: dropped by the inner join, since the label is undefined without both sides.</li>
+<li>GA4 engagement metrics: coverage and alignment were not verified for this window, so the final model uses Search Console signals only.</li>
+</ul>
+<p>No client names, URLs or private queries appear on this page.</p>
+</section>
+
+<section id="methodology">
+<h2>3. Methodology</h2>
+<h3>Framing</h3>
+<p>Binary classification. One row is one client–content pair aggregated to a calendar month. The success metric is F1 on the positive class, measured on a future month.</p>
+<h3>Label definition</h3>
+<p>A page gets <code>needs_review = 1</code> in a given month when both hold:</p>
+<ol>
+<li><code>ctr_gap &gt; 0</code>: its CTR is below the expected CTR for its average-position bucket.</li>
+<li><code>impressions ≥ 100</code>: there is enough volume for CTR to be informative.</li>
+</ol>
+<table>
+<tr><th>Position bucket</th><th>1–3</th><th>3–5</th><th>5–10</th><th>10–20</th><th>20+</th></tr>
+<tr><td>Expected CTR</td><td>1.95%</td><td>1.83%</td><td>0.85%</td><td>0.69%</td><td>0.22%</td></tr>
+</table>
+<p>The benchmarks are mean CTR per bucket observed in April 2025. The label is a defined rule, not an observed business outcome. The model learns to anticipate that rule one month ahead.</p>
+<h3>Features, model and baselines</h3>
+<p>Three features from the feature month only: <code>impressions</code>, <code>avg_position</code>, <code>ctr</code>. The derived columns <code>expected_ctr</code>, <code>ctr_gap</code>, <code>position_bucket</code> and <code>needs_review</code> were kept out of the feature set.</p>
+<pre><code>Pipeline(
+  SimpleImputer(strategy="median"),
+  StandardScaler(),
+  LogisticRegression(max_iter=1000, random_state=42)
+)</code></pre>
+<p>Logistic regression was chosen as an interpretable, honest baseline before more complex models. Two reference points frame its score: a trivial predictor that flags every page, and the Week 4 rule applied to May features to predict June.</p>
+<h3>Validation design</h3>
+<table>
+<tr><th>Split</th><th>Train</th><th>Test</th></tr>
+<tr><td>Random 80/20 (comparison only)</td><td>April features → May label</td><td>Held-out 20% of the same April→May pairs</td></tr>
+<tr><td><strong>Time-aware (reported)</strong></td><td>April features → May label</td><td><strong>May features → June label</strong></td></tr>
+</table>
+<h3>Leakage checks</h3>
+<p>Seven checks were run and all passed: no label-derived features, target absent from X, temporal order preserved, preprocessing fitted inside the pipeline, no ID features, no future target in training, and identical feature sets for train and test. These checks are partly structural, since they confirm what the code does and not what the data contain. One real caveat remains: the same pages appear in consecutive months, so the time-aware split is not grouped by client or page.</p>
+</section>
+
+<section id="results">
+<h2>4. Results</h2>
+<p>On the time-aware test (May features → June outcomes) the logistic model measured an F1 of <strong>0.716</strong>. The random split gave 0.709, a difference of 0.007, so there is no sign of temporal degradation over this horizon.</p>
+
+<figure>
+<svg viewBox="0 0 560 230" role="img" aria-label="Bar chart of F1 scores: random split 0.709, time-aware split 0.716, flag-everything reference 0.673">
+<line x1="150" y1="20" x2="150" y2="190" stroke="currentColor" opacity=".3"/>
+<g font-size="13">
+<text x="140" y="52" text-anchor="end">Random 80/20</text>
+<rect x="150" y="34" width="354" height="26" fill="var(--accent)" opacity=".55"/>
+<text x="510" y="52" font-weight="600">0.709</text>
+<text x="140" y="107" text-anchor="end">Time-aware</text>
+<rect x="150" y="89" width="358" height="26" fill="var(--accent)"/>
+<text x="514" y="107" font-weight="600">0.716</text>
+<text x="140" y="162" text-anchor="end">Flag every page</text>
+<rect x="150" y="144" width="337" height="26" fill="var(--warm)" opacity=".8"/>
+<text x="493" y="162" font-weight="600">0.673</text>
+</g>
+<text x="150" y="212" font-size="11" class="m">F1 on the positive class. Axis starts at 0.</text>
+</svg>
+<figcaption>Figure 1. F1 for the logistic model under two splits, with a trivial reference. The reference value is calculated from the June positive rate (50.8%): precision 0.508, recall 1.0.</figcaption>
+</figure>
+
+<h3>Where the model is right and wrong</h3>
+<p>Under the time-aware split the model is strongly tilted toward flagging pages: it finds 87% of pages that later meet the rule but is right about only 61% of the pages it flags.</p>
+<table>
+<tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr>
+<tr><td>0, no review</td><td>0.759</td><td>0.422</td><td>0.542</td><td>6,867</td></tr>
+<tr><td>1, needs review</td><td>0.608</td><td>0.870</td><td>0.716</td><td>7,081</td></tr>
+</table>
+
+<figure>
+<svg viewBox="0 0 560 260" role="img" aria-label="Confusion matrix: true negatives 2895, false positives 3972, false negatives 921, true positives 6160">
+<g font-size="12"><text x="285" y="18" text-anchor="middle" class="m">Predicted</text>
+<text x="215" y="42" text-anchor="middle">No review</text><text x="375" y="42" text-anchor="middle">Needs review</text>
+<text transform="translate(28 150) rotate(-90)" text-anchor="middle" class="m">Actual</text>
+<text x="125" y="97" text-anchor="end">No review</text><text x="125" y="177" text-anchor="end">Needs review</text></g>
+<g font-size="20" font-weight="600" text-anchor="middle">
+<rect x="135" y="52" width="160" height="70" fill="var(--accent)" opacity=".55"/><text x="215" y="95" fill="#fff" style="fill:var(--ink)">2,895</text>
+<rect x="295" y="52" width="160" height="70" fill="var(--warm)" opacity=".7"/><text x="375" y="95">3,972</text>
+<rect x="135" y="122" width="160" height="70" fill="var(--warm)" opacity=".25"/><text x="215" y="165">921</text>
+<rect x="295" y="122" width="160" height="70" fill="var(--accent)"/><text x="375" y="165" style="fill:#fff">6,160</text>
+</g>
+<text x="285" y="222" text-anchor="middle" font-size="12" class="m">3,972 pages the rule did not flag in June were still flagged by the model.</text>
+</svg>
+<figcaption>Figure 2. Confusion matrix, May features → June outcomes (13,948 pages).</figcaption>
+</figure>
+
+<h3>Model against the Week 4 rule</h3>
+<table>
+<tr><th>Predictor</th><th>Test</th><th>F1</th></tr>
+<tr><td>Flag every page</td><td>May → June</td><td>0.673 (calculated)</td></tr>
+<tr><td>Week 4 rule carried forward (May features → June label)</td><td>May → June</td><td>—</td></tr>
+<tr><td>Logistic regression</td><td>May → June</td><td>0.716</td></tr>
+</table>
+<!-- FILL: run the baseline cell in final_paper.ipynb (section 4) and replace the dash above with baseline_f1 rounded to 3 decimals. -->
+<p>The carried-forward rule is not reported on this page version; its value is produced by the baseline cell in the paper notebook. What the model adds over any binary rule is a graded probability, which allows a ranked queue.</p>
+
+<h3>The queue</h3>
+<p>Pages are sorted by predicted probability of needing review. Figures 3 and 4 are exported by the notebook from an April 2025 snapshot.</p>
+<figure>
+<img class="fig-img" src="figures/action_queue_reason_codes.png" alt="Bar chart of action queue items by reason code" onerror="this.closest('figure').hidden=true">
+<figcaption>Figure 3. Queue items by reason code.</figcaption>
+</figure>
+<figure>
+<img class="fig-img" src="figures/action_queue_probability.png" alt="Histogram of predicted review probabilities" onerror="this.closest('figure').hidden=true">
+<figcaption>Figure 4. Distribution of predicted review probabilities.</figcaption>
+</figure>
+<div class="callout">Among the top-ranked pages, predicted probabilities are effectively 1.0, so order within that group reflects tiny numeric differences. Treat the top of the queue as a group to review, not as a precise ranking.</div>
+</section>
+
+<section id="limitations">
+<h2>5. Limitations and honest framing</h2>
+<h3>What this work can claim</h3>
+<ul>
+<li><strong>Observed:</strong> over April–June 2025, a logistic regression on three features anticipated the rule-defined label with F1 ≈ 0.72 on future data.</li>
+<li><strong>Directional:</strong> higher-ranked pages are more likely to satisfy the review rule next month.</li>
+<li><strong>Decision support:</strong> the output is a prioritization list for human triage.</li>
+</ul>
+<h3>What it cannot claim</h3>
+<ul class="cannot">
+<li>That editing a flagged page improves its CTR. No intervention was run.</li>
+<li>Anything about how a search engine ranks pages. Positions and CTRs are inputs, not a model of ranking.</li>
+<li>That the result holds beyond this window. It was measured on a single horizon.</li>
+<li>Anything about engagement beyond clicks. Only Search Console signals were used.</li>
+</ul>
+<h3>Methodological caveats</h3>
+<ul>
+<li>The label is a rule, and two of the three features (<code>ctr</code>, <code>avg_position</code>) are the rule's own inputs. The model largely learns to reproduce the rule one month ahead, so the F1 reflects month-to-month stability of page performance as much as model skill.</li>
+<li>The margin over flagging every page is modest (0.716 against 0.673), and the model leans toward over-flagging.</li>
+<li>Pages recur across months and clients, so the time-aware split is not grouped by client or page.</li>
+<li>Expected-CTR benchmarks come from April data, the same month used for training features.</li>
+</ul>
+</section>
+
+<section id="recommendations">
+<h2>6. Ranked recommendations: action playbook</h2>
+<p>The deliverable is <code>work/outputs/action_queue.csv</code>: one row per client–content pair, sorted by <code>review_probability</code>, with a reason code and a recommended human action.</p>
+<table>
+<tr><th>Reason code</th><th>Meaning</th><th>Recommended action</th></tr>
+<tr><td><code>LOW_CTR_FOR_POSITION</code></td><td>CTR is below the benchmark for its position bucket</td><td>Review title, snippet and search-intent alignment</td></tr>
+<tr><td><code>LOW_VOLUME</code></td><td>Fewer than 100 impressions</td><td>Monitor and gather more evidence before changing content</td></tr>
+<tr><td><code>MODEL_FLAG_REVIEW</code></td><td>The model flags the page but the rule does not</td><td>Human investigation</td></tr>
+<tr><td><code>NO_IMMEDIATE_ACTION</code></td><td>Not prioritized</td><td>No immediate review</td></tr>
+</table>
+<h3>Intended use</h3>
+<p>Marketing and UX leads running weekly triage open the queue, read the top rows, and assign reviewers to items marked <code>LOW_CTR_FOR_POSITION</code> or <code>MODEL_FLAG_REVIEW</code>. It should not drive automated edits, deletions, redirects or rewrites.</p>
+<h3>Before acting on a row</h3>
+<ol>
+<li><strong>Search intent:</strong> does the page satisfy the intent of the queries it ranks for?</li>
+<li><strong>Evidence volume:</strong> are there enough impressions to act, or only to monitor?</li>
+<li><strong>Business context:</strong> is the page deliberately conservative for compliance, brand or legal reasons?</li>
+</ol>
+<h3>Monitoring and retraining</h3>
+<p>Re-run the time-aware evaluation monthly. Consider retraining when:</p>
+<ul>
+<li>F1 falls more than 0.05 below 0.716 for two consecutive months.</li>
+<li>The share of <code>needs_review = 1</code> moves more than 10 percentage points from the training window.</li>
+<li>Feature distributions shift, for example median position moving by a bucket.</li>
+<li>The top of the queue stops capturing later <code>needs_review</code> cases.</li>
+<li>The label definition or the expected-CTR benchmarks change.</li>
+</ul>
+</section>
+
+<section id="reproducibility">
+<h2>7. Reproducibility</h2>
+<p>Repository: <a href="https://github.com/NoT-Serna/Juan_Serna_FlyRank">github.com/NoT-Serna/Juan_Serna_FlyRank</a>. Notebooks are under <code>work/notebooks/</code>.</p>
+<table>
+<tr><th>Week</th><th>Notebook</th><th>Purpose</th></tr>
+<tr><td>1</td><td><a href="https://github.com/NoT-Serna/Juan_Serna_FlyRank/blob/main/work/notebooks/w01_research_question.ipynb">w01_research_question</a></td><td>Lane and problem framing</td></tr>
+<tr><td>2</td><td><a href="https://github.com/NoT-Serna/Juan_Serna_FlyRank/blob/main/work/notebooks/w02_ml_task_framing.ipynb">w02_ml_task_framing</a></td><td>Classification framing</td></tr>
+<tr><td>3</td><td><a href="https://github.com/NoT-Serna/Juan_Serna_FlyRank/blob/main/work/notebooks/w03_data_contract.ipynb">w03_data_contract</a></td><td>Grain, fields, exclusions, verification queries</td></tr>
+<tr><td>4</td><td><a href="https://github.com/NoT-Serna/Juan_Serna_FlyRank/blob/main/work/notebooks/w04_baseline_score.ipynb">w04_baseline_score</a></td><td>Rule, expected-CTR benchmarks, baseline queue</td></tr>
+<tr><td>5</td><td><a href="https://github.com/NoT-Serna/Juan_Serna_FlyRank/blob/main/work/notebooks/w05_model.ipynb">w05_model</a></td><td>First logistic regression</td></tr>
+<tr><td>6</td><td><a href="https://github.com/NoT-Serna/Juan_Serna_FlyRank/blob/main/work/notebooks/w06_validation_audit.ipynb">w06_validation_audit</a></td><td>Random vs time-aware split, leakage audit</td></tr>
+<tr><td>7</td><td><a href="https://github.com/NoT-Serna/Juan_Serna_FlyRank/blob/main/work/notebooks/w07_action_playbook.ipynb">w07_action_playbook</a></td><td>Reason codes, ranked queue, exports</td></tr>
+</table>
+<p>Environment: Python 3.10+, <code>duckdb</code>, <code>pandas</code>, <code>numpy</code>, <code>scikit-learn</code>, <code>matplotlib</code>. In Colab, set <code>HF_TOKEN</code> in Secrets before running. To reproduce the headline number, run the Week 6 notebook: it should print a time-aware F1 of 0.7157.</p>
+</section>
+
+<section id="acknowledgments">
+<h2>8. Acknowledgments and data credit</h2>
+<p><strong>Built on the FlyRank ML Internship dataset</strong> — <a href="https://flyrank.ai">flyrank.ai</a>. The warehouse, benchmark signals and internship scaffolding made this analysis possible. Starter repository: <a href="https://github.com/flyrank-bih/flyrank-ml-internship-starter">flyrank-bih/flyrank-ml-internship-starter</a>.</p>
+<p>All findings depend on the quality and scope of that dataset. Any errors of interpretation are my own.</p>
+</section>
+
+<footer>Juan Serna · FlyRank ML Internship capstone · Results are directional and intended for decision support.</footer>
+</main>
+</div>
+</body>
+</html>
